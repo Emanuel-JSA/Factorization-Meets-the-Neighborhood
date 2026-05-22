@@ -1,0 +1,19 @@
+# core científico
+numpy
+pandas
+scipy
+scikit-learn
+
+# deep learning (no Mac, pip install torch já vem com suporte a MPS)
+torch
+torchvision
+
+# notebook / experimentos
+ipykernel
+jupyter
+matplotlib
+seaborn
+tqdm
+
+# RecSys helpers
+implicit
