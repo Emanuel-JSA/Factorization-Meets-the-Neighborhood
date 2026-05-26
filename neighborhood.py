@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import train_test_split
 
 ratings = pd.read_csv("dataset/ratings.csv")
@@ -30,7 +30,7 @@ def vizinhos_do_item(movie_j, k=20):
 
 
 # Pre-computa a vizinhanca de cada item UMA vez.
-K = 20
+K = 10
 vizinhanca = {i: vizinhos_do_item(i, K) for i in s_matriz.columns}
 
 # buscar r_uj em O(1) dentro do loop de treino.
@@ -39,7 +39,7 @@ for row in train.itertuples():
     ratings_usuario[row.userId][row.movieId] = row.rating
 
 alpha = 0.005
-lmbda = 0.02
+lmbda = 0.01
 epocas = 4
 
 mu = train["rating"].mean()
@@ -99,3 +99,18 @@ for epoca in range(epocas):
     print(f"epoca {epoca + 1:2d}  RMSE_teste = {rmse:.4f}")
 
 print("\nMelhor RMSE:", min(historico_rmse))
+
+test = test.copy()
+test["predicao"] = [
+    predizer(row.userId, row.movieId)
+    for row in test.itertuples()
+]
+
+rmse = np.sqrt(mean_squared_error(test["rating"], test["predicao"]))
+mae = mean_absolute_error(test["rating"], test["predicao"])
+
+print(f"RMSE= {rmse}")
+print(f"MAE= {mae}")
+
+# RMSE= 0.8668186936661175
+# MAE= 0.6648198293001096
