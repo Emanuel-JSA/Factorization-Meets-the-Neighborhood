@@ -75,32 +75,32 @@ print(f"MAE= {mae}")
 # MAE= 0.6627077073075438
 
 # %%
-from itertools import product
+# from itertools import product
 
-alphas = [0.001, 0.005, 0.01]
-lambdas = [0.01, 0.02, 0.05]
-epocas = 40
+# alphas = [0.001, 0.005, 0.01]
+# lambdas = [0.01, 0.02, 0.05]
+# epocas = 40
 
-resultados = []
+# resultados = []
 
-for alpha, lambda1 in product(alphas, lambdas):
-    b_u = {u: 0.0 for u in train["userId"].unique()}
-    b_i = {i: 0.0 for i in train["movieId"].unique()}
+# for alpha, lambda1 in product(alphas, lambdas):
+#     b_u = {u: 0.0 for u in train["userId"].unique()}
+#     b_i = {i: 0.0 for i in train["movieId"].unique()}
 
-    for epoca in range(epocas):
-        train_shuffled = train.sample(frac=1, random_state=epoca)
-        for row in train_shuffled.itertuples():
-            u, i, r = row.userId, row.movieId, row.rating
-            e_ui = r - mu - b_u.get(u, 0.0) - b_i.get(i, 0.0)
-            b_u[u] = b_u.get(u, 0.0) + alpha * (e_ui - lambda1 * b_u.get(u, 0.0))
-            b_i[i] = b_i.get(i, 0.0) + alpha * (e_ui - lambda1 * b_i.get(i, 0.0))
+#     for epoca in range(epocas):
+#         train_shuffled = train.sample(frac=1, random_state=epoca)
+#         for row in train_shuffled.itertuples():
+#             u, i, r = row.userId, row.movieId, row.rating
+#             e_ui = r - mu - b_u.get(u, 0.0) - b_i.get(i, 0.0)
+#             b_u[u] = b_u.get(u, 0.0) + alpha * (e_ui - lambda1 * b_u.get(u, 0.0))
+#             b_i[i] = b_i.get(i, 0.0) + alpha * (e_ui - lambda1 * b_i.get(i, 0.0))
 
-    preds = [mu + b_u.get(r.userId, 0.0) + b_i.get(r.movieId, 0.0) for r in test.itertuples()]
-    rmse = np.sqrt(mean_squared_error(test["rating"], preds))
+#     preds = [mu + b_u.get(r.userId, 0.0) + b_i.get(r.movieId, 0.0) for r in test.itertuples()]
+#     rmse = np.sqrt(mean_squared_error(test["rating"], preds))
 
-    resultados.append({"alpha": alpha, "lambda1": lambda1, "rmse": rmse})
-    print(f"alpha={alpha} lambda={lambda1} | RMSE={rmse:.4f}")
+#     resultados.append({"alpha": alpha, "lambda1": lambda1, "rmse": rmse})
+#     print(f"alpha={alpha} lambda={lambda1} | RMSE={rmse:.4f}")
 
-df_resultados = pd.DataFrame(resultados)
-print("\nMelhor combinação:")
-print(df_resultados.loc[df_resultados["rmse"].idxmin()])
+# df_resultados = pd.DataFrame(resultados)
+# print("\nMelhor combinação:")
+# print(df_resultados.loc[df_resultados["rmse"].idxmin()])
