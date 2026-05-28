@@ -1,10 +1,8 @@
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-from itertools import product
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.model_selection import train_test_split
-import matplotlib.pyplot as plt
 
 # =====================
 # CONFIG DO EXPERIMENTO
