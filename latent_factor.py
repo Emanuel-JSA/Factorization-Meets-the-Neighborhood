@@ -71,5 +71,5 @@ rmse = np.sqrt(mean_squared_error(y_true, y_pred))
 mae = mean_absolute_error(y_true, y_pred)
 print(f"RMSE: {rmse:.4f}")
 print(f"MAE: {mae:.4f}")
-# RMSE: 0.8732
-# MAE: 0.6664
+# RMSE= 0.8732
+# MAE= 0.6664
