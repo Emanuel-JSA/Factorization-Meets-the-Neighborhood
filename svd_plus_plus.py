@@ -2,9 +2,21 @@ from collections import defaultdict
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.model_selection import train_test_split
+
+# r̂_ui = b_ui + q_i^T (p_u + |N(u)|^(-1/2) Σ_{j∈N(u)} y_j)
 
 K = 20
+EPOCAS = 20
+LEARNING_RATE = 0.005
+LAMBDA = 0.02
 DECAY = 0.9
+ITEM_BIAS_SHRINKAGE = 10
+USER_BIAS_SHRINKAGE = 10
+SEED = 42
+
+rng = np.random.RandomState(SEED)
 
 ratings = pd.read_csv("dataset/ratings.csv")
 
@@ -15,42 +27,59 @@ item_to_idx = {iid: idx for idx, iid in enumerate(item_ids)}
 n_users = len(user_ids)
 n_items = len(item_ids)
 
+u_all = ratings.userId.map(user_to_idx).values
+i_all = ratings.movieId.map(item_to_idx).values
+r_all = ratings.rating.values.astype(np.float64)
 
-def build_lookups(df):
+# split treino/teste
+idx = np.arange(len(r_all))
+train_idx, test_idx = train_test_split(idx, test_size=0.2, random_state=SEED)
+
+u_train, i_train, r_train = u_all[train_idx], i_all[train_idx], r_all[train_idx]
+u_test, i_test, r_test = u_all[test_idx], i_all[test_idx], r_all[test_idx]
+
+
+def build_lookups(u_arr, i_arr, r_arr):
     ratings_by_user = defaultdict(dict)  # u_idx -> {i_idx: rating}
     ratings_by_item = defaultdict(dict)  # i_idx -> {u_idx: rating}
-    for user, item, rating in zip(
-        df.userId.values, df.movieId.values, df.rating.values
-    ):
-        u = user_to_idx[user]
-        i = item_to_idx[item]
-        ratings_by_user[u][i] = rating
-        ratings_by_item[i][u] = rating
+    for u, i, r in zip(u_arr, i_arr, r_arr):
+        ratings_by_user[u][i] = r
+        ratings_by_item[i][u] = r
     return ratings_by_user, ratings_by_item
 
 
-ratings_by_user, ratings_by_item = build_lookups(ratings)
+ratings_by_user, ratings_by_item = build_lookups(u_train, i_train, r_train)
 
-global_mean = float(np.mean(ratings.rating.values))
-user_bias_t = defaultdict(float)  # u_idx -> b_u
-item_bias_t = defaultdict(float)  # i_idx -> b_i
-
-
-def baseline_t(u, i):
-    return global_mean + user_bias_t.get(u, 0.0) + item_bias_t.get(i, 0.0)
-
-
+# N(u) pré-computado como array de índices
 N = {u: np.array(list(items.keys())) for u, items in ratings_by_user.items()}
 
-rng = np.random.RandomState(42)
-P = rng.normal(0, 0.1, size=(n_users, K))
-Q = rng.normal(0, 0.1, size=(n_items, K))
-Y = rng.normal(0, 0.1, size=(n_items, K))
+
+def compute_baselines(ratings_by_user, ratings_by_item, global_mean):
+    item_bias = defaultdict(float)
+    for item, item_users in ratings_by_item.items():
+        item_bias[item] = sum(r - global_mean for r in item_users.values()) / (
+            ITEM_BIAS_SHRINKAGE + len(item_users)
+        )
+    user_bias = defaultdict(float)
+    for user, user_items in ratings_by_user.items():
+        user_bias[user] = sum(
+            r - global_mean - item_bias[item] for item, r in user_items.items()
+        ) / (USER_BIAS_SHRINKAGE + len(user_items))
+    return user_bias, item_bias
 
 
-# r̂_ui = b_ui + q_i^T (p_u + |N(u)|^(-1/2) Σ_{j∈N(u)} y_j)
+global_mean = float(np.mean(r_train))
+user_bias_t, item_bias_t = compute_baselines(
+    ratings_by_user, ratings_by_item, global_mean
+)
+
+P = rng.normal(0, 0.1, size=(n_users, K))  # p_u
+Q = rng.normal(0, 0.1, size=(n_items, K))  # q_i
+Y = rng.normal(0, 0.1, size=(n_items, K))  # y_j
+
+
 def predict(u, i):
-    baseline = baseline_t(u, i)
+    baseline = global_mean + user_bias_t.get(u, 0.0) + item_bias_t.get(i, 0.0)
     Nu = N.get(u, np.empty(0, dtype=int))
     if len(Nu) > 0:
         implicit_sum = Y[Nu].sum(axis=0) * (len(Nu) ** -0.5)
@@ -60,27 +89,17 @@ def predict(u, i):
     return baseline + np.dot(Q[i], user_repr)
 
 
-LEARNING_RATE = 0.005
-LAMBDA = 0.02
-EPOCAS = 20
-
-
-def train(u_train, i_train, r_train):
+def train():
     γ = LEARNING_RATE
     λ = LAMBDA
-
     for epoca in range(EPOCAS):
         order = rng.permutation(len(r_train))
         sq_err = 0.0
-
-        for idx in order:
-            u = u_train[idx]
-            i = i_train[idx]
-            r = r_train[idx]
+        for k in order:
+            u, i, r = u_train[k], i_train[k], r_train[k]
 
             Nu = N.get(u, np.empty(0, dtype=int))
             norm = len(Nu) ** -0.5 if len(Nu) > 0 else 0.0
-
             implicit_sum = Y[Nu].sum(axis=0) * norm if len(Nu) > 0 else np.zeros(K)
             user_repr = P[u] + implicit_sum
 
@@ -90,19 +109,29 @@ def train(u_train, i_train, r_train):
             e = r - pred
             sq_err += e * e
 
-            bu = user_bias_t[u]
-            bi = item_bias_t[i]
-            user_bias_t[u] += γ * (e - λ * bu)
-            item_bias_t[i] += γ * (e - λ * bi)
+            user_bias_t[u] += γ * (e - λ * user_bias_t[u])
+            item_bias_t[i] += γ * (e - λ * item_bias_t[i])
 
             q_i_old = Q[i].copy()
             P[u] += γ * (e * q_i_old - λ * P[u])
             Q[i] += γ * (e * user_repr - λ * q_i_old)
-
             if len(Nu) > 0:
-                grad_y = γ * (e * norm * q_i_old - λ * Y[Nu])
-                Y[Nu] += grad_y
+                Y[Nu] += γ * (e * norm * q_i_old - λ * Y[Nu])
 
         rmse = np.sqrt(sq_err / len(r_train))
+        print(f"época {epoca + 1:2d}: RMSE_train = {rmse:.4f}")
         γ *= DECAY
-        print(f"época {epoca + 1}: RMSE_train = {rmse:.4f}")
+
+
+def evaluate(u_arr, i_arr, r_arr):
+    preds = np.array([predict(u, i) for u, i in zip(u_arr, i_arr)])
+    preds = np.clip(preds, 0.5, 5.0)
+    rmse = np.sqrt(mean_squared_error(r_arr, preds))
+    mae = mean_absolute_error(r_arr, preds)
+    return rmse, mae
+
+
+train()
+rmse, mae = evaluate(u_test, i_test, r_test)
+print(f"\nRMSE: {rmse:.4f}")
+print(f"MAE:  {mae:.4f}")
