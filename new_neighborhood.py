@@ -31,55 +31,37 @@ def build_lookups(df):
     return ratings_by_user, ratings_by_item
 
 
-#   Estatísticas de co-avaliação, acumuladas varrendo cada usuário uma vez.
-#   Para cada par (i, j) avaliado pelo mesmo usuário acumulamos as somas
-#   necessárias para a correlação de Pearson sobre o suporte comum U_ij.
-#   Custo ~ Σ_u |R(u)|^2  (esparso, evita o item×item denso).
-def cooccurrence_stats(ratings_by_user):
-    pair_count = defaultdict(int)  # |U_ij|  nº de usuários que avaliaram i e j
-    sum_product = defaultdict(float)  # Σ r_ui r_uj
-    sum_i = defaultdict(float)  # Σ r_ui
-    sum_j = defaultdict(float)  # Σ r_uj
-    sum_sq_i = defaultdict(float)  # Σ r_ui^2
-    sum_sq_j = defaultdict(float)  # Σ r_uj^2
-    for user_ratings in ratings_by_user.values():
-        rated_items = list(user_ratings.items())
-        for a in range(len(rated_items)):
-            item_a, rating_a = rated_items[a]
-            for b in range(a + 1, len(rated_items)):
-                item_b, rating_b = rated_items[b]
-                pair = (item_a, item_b) if item_a < item_b else (item_b, item_a)
-                # mantém a ordem do par para somar ri/rj no lado certo
-                if item_a < item_b:
-                    rating_lo, rating_hi = rating_a, rating_b
-                else:
-                    rating_lo, rating_hi = rating_b, rating_a
-                pair_count[pair] += 1
-                sum_product[pair] += rating_lo * rating_hi
-                sum_i[pair] += rating_lo
-                sum_j[pair] += rating_hi
-                sum_sq_i[pair] += rating_lo * rating_lo
-                sum_sq_j[pair] += rating_hi * rating_hi
-    return pair_count, sum_product, sum_i, sum_j, sum_sq_i, sum_sq_j
-
-
-#   Pearson sobre o suporte comum + shrinkage:
-#   ρ_ij = cov / (σ_i σ_j) (médias tomadas sobre U_ij)
-#   s_ij = n_ij / (n_ij + λ2) · ρ_ij
-def shrunk_similarities(stats, shrinkage=SIM_SHRINKAGE):
-    pair_count, sum_product, sum_i, sum_j, sum_sq_i, sum_sq_j = stats
+#   Correlação de Pearson entre cada par de itens, calculada sobre os
+#   usuários que avaliaram os dois (o "suporte comum" U_ij).
+#   ρ_ij = Σ(r_ui − r̄_i)(r_uj − r̄_j) / sqrt(Σ(r_ui − r̄_i)² · Σ(r_uj − r̄_j)²)
+#   shrinkage: encolhe a correlação de pares com poucos usuários em comum.
+def pearson_similarities(ratings_by_item, shrinkage=SIM_SHRINKAGE):
+    items = list(ratings_by_item)
     similarities = {}
-    for pair, num_common in pair_count.items():
-        if num_common < 2:
-            continue
-        cov = sum_product[pair] - sum_i[pair] * sum_j[pair] / num_common
-        var_i = sum_sq_i[pair] - sum_i[pair] * sum_i[pair] / num_common
-        var_j = sum_sq_j[pair] - sum_j[pair] * sum_j[pair] / num_common
-        denom = np.sqrt(var_i * var_j)
-        if denom <= 0:
-            continue
-        correlation = cov / denom
-        similarities[pair] = (num_common / (num_common + shrinkage)) * correlation
+    for a in range(len(items)):
+        item_i = items[a]
+        for b in range(a + 1, len(items)):
+            item_j = items[b]
+
+            # usuários que avaliaram os dois itens
+            common_users = ratings_by_item[item_i].keys() & ratings_by_item[item_j].keys()
+            if len(common_users) < 2:
+                continue
+
+            # notas dos dois itens, na mesma ordem de usuários
+            r_i = np.array([ratings_by_item[item_i][u] for u in common_users])
+            r_j = np.array([ratings_by_item[item_j][u] for u in common_users])
+
+            # Pearson: covariância normalizada pelos desvios
+            r_i = r_i - r_i.mean()
+            r_j = r_j - r_j.mean()
+            denom = np.sqrt((r_i ** 2).sum() * (r_j ** 2).sum())
+            if denom == 0:
+                continue
+            correlation = (r_i * r_j).sum() / denom
+
+            n = len(common_users)
+            similarities[(item_i, item_j)] = n / (n + shrinkage) * correlation
     return similarities
 
 
@@ -97,7 +79,7 @@ def topk_neighbors(similarities, k=NUM_NEIGHBORS):
     return neighbors
 
 
-#   Baseline congelada b_ui = μ + b_u + b_i, estimada em forma fechada (paper §2).
+#   Baseline congelada b_ui = μ + b_u + b_i, estimada em forma fechada
 #   Item primeiro, usuário depois sobre o resíduo (r_ui − μ − b_i).
 #   O λ no denominador encolhe o bias de quem tem poucas avaliações para 0.
 def compute_baselines(ratings_by_user, ratings_by_item):
@@ -116,7 +98,7 @@ def compute_baselines(ratings_by_user, ratings_by_item):
 
 
 ratings_by_user, ratings_by_item = build_lookups(ratings)
-similarities = shrunk_similarities(cooccurrence_stats(ratings_by_user))
+similarities = pearson_similarities(ratings_by_item)
 neighbors = topk_neighbors(similarities)
 global_mean, user_bias, item_bias = compute_baselines(ratings_by_user, ratings_by_item)
 
