@@ -178,8 +178,8 @@ for epoch in range(NUM_EPOCHS):
         user_bias_t[user] = user_bias_t.get(user, 0.0) + LEARNING_RATE * (
             erro - LAMBDA * user_bias_t.get(user, 0.0)
         )
-        item_bias_t[user] = item_bias_t.get(user, 0.0) + LEARNING_RATE * (
-            erro - LAMBDA * item_bias_t.get(user, 0.0)
+        item_bias_t[item_i] = item_bias_t.get(item_i, 0.0) + LEARNING_RATE * (
+            erro - LAMBDA * item_bias_t.get(item_i, 0.0)
         )
 
         for item_j in rated:
