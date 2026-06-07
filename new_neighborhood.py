@@ -17,6 +17,9 @@ NUM_NEIGHBORS = 40
 SIM_SHRINKAGE = 100
 ITEM_BIAS_SHRINKAGE = 10  # shrinkage do bias de item
 USER_BIAS_SHRINKAGE = 10  # shrinkage do bias de usuário
+LEARNING_RATE = 0.005
+LAMBDA = 0.02
+NUM_EPOCHS = 30
 
 ratings = pd.read_csv("dataset/ratings.csv")
 
@@ -25,7 +28,9 @@ ratings = pd.read_csv("dataset/ratings.csv")
 def build_lookups(df):
     ratings_by_user = defaultdict(dict)  # user -> {item: rating}
     ratings_by_item = defaultdict(dict)  # item -> {user: rating}
-    for user, item, rating in zip(df.userId.values, df.movieId.values, df.rating.values):
+    for user, item, rating in zip(
+        df.userId.values, df.movieId.values, df.rating.values
+    ):
         ratings_by_user[user][item] = rating
         ratings_by_item[item][user] = rating
     return ratings_by_user, ratings_by_item
@@ -44,7 +49,9 @@ def pearson_similarities(ratings_by_item, shrinkage=SIM_SHRINKAGE):
             item_j = items[b]
 
             # usuários que avaliaram os dois itens
-            common_users = ratings_by_item[item_i].keys() & ratings_by_item[item_j].keys()
+            common_users = (
+                ratings_by_item[item_i].keys() & ratings_by_item[item_j].keys()
+            )
             if len(common_users) < 2:
                 continue
 
@@ -55,7 +62,7 @@ def pearson_similarities(ratings_by_item, shrinkage=SIM_SHRINKAGE):
             # Pearson: covariância normalizada pelos desvios
             r_i = r_i - r_i.mean()
             r_j = r_j - r_j.mean()
-            denom = np.sqrt((r_i ** 2).sum() * (r_j ** 2).sum())
+            denom = np.sqrt((r_i**2).sum() * (r_j**2).sum())
             if denom == 0:
                 continue
             correlation = (r_i * r_j).sum() / denom
@@ -108,34 +115,97 @@ def neighbors_rated_by(user, item):
     return [j for j in neighbors.get(item, []) if j in ratings_by_user[user]]
 
 
+# usar bias aprendidas como ponto de partida
+user_bias_t = dict(user_bias)
+item_bias_t = dict(item_bias)
+
+
 # b_ui = μ + b_u + b_i  (itens/usuários nunca vistos caem só na média global)
-def baseline(user, item):
-    return global_mean + user_bias.get(user, 0.0) + item_bias.get(item, 0.0)
+def baseline_t(user, item):
+    return global_mean + user_bias_t.get(user, 0.0) + item_bias_t.get(item, 0.0)
 
 
-explicit_weights = defaultdict(float)  # (i, j) -> peso explícito w_ij (direcional, i alvo / j vizinho)
+explicit_weights = defaultdict(
+    float
+)  # (i, j) -> peso explícito w_ij (direcional, i alvo / j vizinho)
 implicit_weights = defaultdict(float)  # (i, j) -> peso implícito c_ij
 
 
 #   r̂_ui = b_ui + |R^k|^(-1/2) Σ (r_uj − b_uj) w_ij + |N^k|^(-1/2) Σ c_ij
 #   Como N(u) = R(u), os dois somatórios percorrem o mesmo R^k(i,u).
-def predict(user, item):
-    prediction = baseline(user, item)
+# def predict(user, item):
+#     prediction = baseline_t(user, item)
+#     rated_neighbors = neighbors_rated_by(user, item)
+#     if not rated_neighbors:
+#         return prediction
+#     norm_factor = len(rated_neighbors) ** -0.5
+#     for j in rated_neighbors:
+#         prediction += (
+#             norm_factor
+#             * (ratings_by_user[user][j] - baseline_t(user, j))
+#             * explicit_weights[(item, j)]
+#         )
+#         prediction += norm_factor * implicit_weights[(item, j)]
+#     return prediction
+
+
+def predict_train(user, item):
+    prediction = baseline_t(user, item)
     rated_neighbors = neighbors_rated_by(user, item)
     if not rated_neighbors:
-        return prediction
+        return prediction, rated_neighbors, 0.0
     norm_factor = len(rated_neighbors) ** -0.5
     for j in rated_neighbors:
-        prediction += norm_factor * (ratings_by_user[user][j] - baseline(user, j)) * explicit_weights[(item, j)]
+        prediction += (
+            norm_factor
+            * (ratings_by_user[user][j] - baseline_t(user, j))
+            * explicit_weights[(item, j)]
+        )
         prediction += norm_factor * implicit_weights[(item, j)]
-    return prediction
+    return prediction, rated_neighbors, norm_factor
 
 
-print("n pares de similaridade:", len(similarities))
-example_item = next(iter(neighbors))
-print("exemplo item", example_item, "->", neighbors[example_item][:5])
-example_user = next(iter(ratings_by_user))
-print(
-    "R^k para (u=%s, i=%s):" % (example_user, example_item),
-    neighbors_rated_by(example_user, example_item)[:8],
-)
+train_df, test_df = train_test_split(ratings, test_size=0.2, random_state=10)
+train = list(zip(train_df.userId, train_df.movieId, train_df.rating))
+
+for epoch in range(NUM_EPOCHS):
+    np.random.shuffle(train)
+    for user, item_i, rating in train:
+        pred, rated, norm = predict_train(user, item_i)
+        erro = rating - pred
+
+        # bias
+        user_bias_t[user] = user_bias_t.get(user, 0.0) + LEARNING_RATE * (
+            erro - LAMBDA * user_bias_t.get(user, 0.0)
+        )
+        item_bias_t[user] = item_bias_t.get(user, 0.0) + LEARNING_RATE * (
+            erro - LAMBDA * item_bias_t.get(user, 0.0)
+        )
+
+        for item_j in rated:
+            w = explicit_weights[(item_i, item_j)]
+            c = implicit_weights[(item_i, item_j)]
+            explicit_weights[(item_i, item_j)] += LEARNING_RATE * (
+                erro * norm * (ratings_by_user[user][item_j] - baseline_t(user, item_j))
+                - LAMBDA * w
+            )
+            implicit_weights[(item_i, item_j)] += LEARNING_RATE * (
+                erro * norm - LAMBDA * c
+            )
+
+    preds = [predict_train(u, i)[0] for u, i, r in train]
+    reais = [r for _, _, r in train]
+    print(f"epoch {epoch}: RMSE treino = {mean_squared_error(reais, preds) ** 0.5:.4f}")
+
+
+test = test_df.copy()
+test["predicao"] = [
+    predict_train(u, i)[0] for u, i in zip(test["userId"], test["movieId"])
+]
+
+rmse = np.sqrt(mean_squared_error(test["rating"], test["predicao"]))
+mae = mean_absolute_error(test["rating"], test["predicao"])
+print(f"RMSE= {rmse}")
+print(f"MAE= {mae}")
+# RMSE= 0.7672990367253936
+# MAE= 0.5829319519697851
