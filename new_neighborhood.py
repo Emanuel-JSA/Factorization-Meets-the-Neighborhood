@@ -24,6 +24,10 @@ NUM_EPOCHS = 30
 ratings = pd.read_csv("dataset/ratings.csv")
 
 
+train_df, test_df = train_test_split(ratings, test_size=0.2, random_state=10)
+train = list(zip(train_df.userId, train_df.movieId, train_df.rating))
+
+
 # R(u) = itens que u avaliou, R(i) = usuários que avaliaram i
 def build_lookups(df):
     ratings_by_user = defaultdict(dict)  # user -> {item: rating}
@@ -90,7 +94,7 @@ def topk_neighbors(similarities, k=NUM_NEIGHBORS):
 #   Item primeiro, usuário depois sobre o resíduo (r_ui − μ − b_i).
 #   O λ no denominador encolhe o bias de quem tem poucas avaliações para 0.
 def compute_baselines(ratings_by_user, ratings_by_item):
-    global_mean = np.mean(ratings.rating.values)
+    global_mean = train_df.rating.mean()
     item_bias = {}  # item -> b_i
     for item, item_users in ratings_by_item.items():
         item_bias[item] = sum(r - global_mean for r in item_users.values()) / (
@@ -104,7 +108,7 @@ def compute_baselines(ratings_by_user, ratings_by_item):
     return global_mean, user_bias, item_bias
 
 
-ratings_by_user, ratings_by_item = build_lookups(ratings)
+ratings_by_user, ratings_by_item = build_lookups(train_df)
 similarities = pearson_similarities(ratings_by_item)
 neighbors = topk_neighbors(similarities)
 global_mean, user_bias, item_bias = compute_baselines(ratings_by_user, ratings_by_item)
@@ -165,9 +169,6 @@ def predict_train(user, item):
     return prediction, rated_neighbors, norm_factor
 
 
-train_df, test_df = train_test_split(ratings, test_size=0.2, random_state=10)
-train = list(zip(train_df.userId, train_df.movieId, train_df.rating))
-
 for epoch in range(NUM_EPOCHS):
     np.random.shuffle(train)
     for user, item_i, rating in train:
@@ -207,5 +208,6 @@ rmse = np.sqrt(mean_squared_error(test["rating"], test["predicao"]))
 mae = mean_absolute_error(test["rating"], test["predicao"])
 print(f"RMSE= {rmse}")
 print(f"MAE= {mae}")
-# RMSE= 0.7672990367253936
-# MAE= 0.5829319519697851
+
+# RMSE= 0.8387239091666603
+# MAE= 0.6390180370312284
