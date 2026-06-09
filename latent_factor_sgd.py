@@ -1,7 +1,7 @@
 import numpy as np
-import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.model_selection import train_test_split
+
+from data import n_items, n_users, test_df, to_indexed, train_df
 
 # Hiperparâmetros
 K = 20
@@ -11,22 +11,8 @@ DECAY = 0.9
 LMBDA_B = 0.02
 LMBDA_F = 0.02
 
-ratings = pd.read_csv("dataset/ratings.csv")
-matrix_r = ratings.pivot_table(index="userId", columns="movieId", values="rating")
-
-n_users, n_items = matrix_r.shape
-
-mask = ~np.isnan(matrix_r.values)
-rows, cols = np.where(mask)
-values = matrix_r.values[rows, cols]
-
-train_idx, test_idx = train_test_split(
-    range(len(values)), test_size=0.2, random_state=42
-)
-
-u_train = rows[train_idx]
-i_train = cols[train_idx]
-r_train = values[train_idx]
+u_train, i_train, r_train = to_indexed(train_df)
+u_test, i_test, y_true = to_indexed(test_df)
 
 # Inicialização
 rng = np.random.RandomState(42)
@@ -58,10 +44,6 @@ for epoca in range(EPOCAS):
     print(f"Época {epoca + 1:2d} | lr={alpha:.5f} | train RMSE={train_rmse:.4f}")
 
 # Avaliação no teste
-u_test = rows[test_idx]
-i_test = cols[test_idx]
-y_true = values[test_idx]
-
 y_pred = mu + b_u[u_test] + b_i[i_test] + np.sum(P[u_test] * Q[i_test], axis=1)
 y_pred = np.clip(y_pred, 0.5, 5.0)
 

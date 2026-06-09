@@ -1,30 +1,18 @@
 from collections import defaultdict
 
 import numpy as np
-import pandas as pd
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import svds
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.model_selection import train_test_split
+
+from data import n_items, n_users, test_df, to_dense, to_indexed, train_df
 
 LMBDA_B = 0.02
 ALPHA0 = 0.01
 DECAY = 0.9
 EPOCAS = 40
 
-ratings = pd.read_csv("dataset/ratings.csv")
-matrix_r = ratings.pivot_table(index="userId", columns="movieId", values="rating")
-
-# Mascarar dados de treino
-mask = ~np.isnan(matrix_r.values)
-rows, cols = np.where(mask)
-values = matrix_r.values[rows, cols]
-train_idx, test_idx = train_test_split(
-    range(len(values)), test_size=0.2, random_state=42
-)
-
-R_train = np.full(matrix_r.shape, np.nan)
-R_train[rows[train_idx], cols[train_idx]] = values[train_idx]
+R_train = to_dense(train_df)
 print(R_train)
 
 # Baseline: aprender mu + b_u + b_i por SGD no treino
@@ -32,9 +20,7 @@ mu = np.nanmean(R_train)
 b_u = defaultdict(float)
 b_i = defaultdict(float)
 
-train_rows_user = rows[train_idx]
-train_cols_item = cols[train_idx]
-train_vals_ratings = values[train_idx]
+train_rows_user, train_cols_item, train_vals_ratings = to_indexed(train_df)
 
 for epoca in range(EPOCAS):
     perm = np.random.RandomState(epoca).permutation(len(train_vals_ratings))
@@ -46,8 +32,8 @@ for epoca in range(EPOCAS):
     ALPHA0 *= DECAY
 
 # Matriz de baseline b_ui (mesma shape da R)
-bu_arr = np.array([b_u[u] for u in range(matrix_r.shape[0])])[:, None]
-bi_arr = np.array([b_i[i] for i in range(matrix_r.shape[1])])[None, :]
+bu_arr = np.array([b_u[u] for u in range(n_users)])[:, None]
+bi_arr = np.array([b_i[i] for i in range(n_items)])[None, :]
 B = mu + bu_arr + bi_arr  # (n_users, n_items)
 
 # SVD sobre o RESÍDUO (R - b_ui)
@@ -65,8 +51,8 @@ Qt = Vh
 # Previsao: r_ui = b_ui + p_u . q_i
 R_hat = (P @ Qt) + B
 
-y_true = values[test_idx]
-y_pred = R_hat[rows[test_idx], cols[test_idx]]
+u_test, i_test, y_true = to_indexed(test_df)
+y_pred = R_hat[u_test, i_test]
 rmse = np.sqrt(mean_squared_error(y_true, y_pred))
 mae = mean_absolute_error(y_true, y_pred)
 print(f"RMSE: {rmse:.4f}")

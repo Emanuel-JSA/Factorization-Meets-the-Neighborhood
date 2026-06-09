@@ -1,13 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.model_selection import train_test_split
 
-ratings = pd.read_csv("dataset/ratings.csv")
-
-# dividir entre dados de treino e dados de teste
-train, test = train_test_split(ratings, test_size=0.2, random_state=10)
+from data import test_df as test
+from data import train_df as train
 
 # Hiperparâmetros
 alpha = 0.005

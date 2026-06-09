@@ -1,9 +1,9 @@
 from collections import defaultdict
 
 import numpy as np
-import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.model_selection import train_test_split
+
+from data import n_items, n_users, test_df, to_indexed, train_df
 
 # r̂_ui = b_ui + q_i^T (p_u + |N(u)|^(-1/2) Σ_{j∈N(u)} y_j)
 
@@ -18,25 +18,8 @@ SEED = 42
 
 rng = np.random.RandomState(SEED)
 
-ratings = pd.read_csv("dataset/ratings.csv")
-
-user_ids = ratings.userId.unique()
-item_ids = ratings.movieId.unique()
-user_to_idx = {uid: idx for idx, uid in enumerate(user_ids)}
-item_to_idx = {iid: idx for idx, iid in enumerate(item_ids)}
-n_users = len(user_ids)
-n_items = len(item_ids)
-
-u_all = ratings.userId.map(user_to_idx).values
-i_all = ratings.movieId.map(item_to_idx).values
-r_all = ratings.rating.values.astype(np.float64)
-
-# split treino/teste
-idx = np.arange(len(r_all))
-train_idx, test_idx = train_test_split(idx, test_size=0.2, random_state=SEED)
-
-u_train, i_train, r_train = u_all[train_idx], i_all[train_idx], r_all[train_idx]
-u_test, i_test, r_test = u_all[test_idx], i_all[test_idx], r_all[test_idx]
+u_train, i_train, r_train = to_indexed(train_df)
+u_test, i_test, r_test = to_indexed(test_df)
 
 
 def build_lookups(u_arr, i_arr, r_arr):

@@ -1,9 +1,9 @@
 from collections import defaultdict
 
 import numpy as np
-import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.model_selection import train_test_split
+
+from data import test_df, train_df
 
 # R^k(i,u) => K vizinhos de i que o u avaliou
 # N^k(i,u) =: K vizinhos de i que u interagiu implicitamente
@@ -21,10 +21,6 @@ LEARNING_RATE = 0.005
 LAMBDA = 0.02
 NUM_EPOCHS = 30
 
-ratings = pd.read_csv("dataset/ratings.csv")
-
-
-train_df, test_df = train_test_split(ratings, test_size=0.2, random_state=10)
 train = list(zip(train_df.userId, train_df.movieId, train_df.rating))
 
 
