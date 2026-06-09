@@ -205,5 +205,5 @@ mae = mean_absolute_error(test["rating"], test["predicao"])
 print(f"RMSE= {rmse}")
 print(f"MAE= {mae}")
 
-# RMSE= 0.8387239091666603
-# MAE= 0.6390180370312284
+# RMSE= 0.8474384730485419
+# MAE= 0.6441185800178536

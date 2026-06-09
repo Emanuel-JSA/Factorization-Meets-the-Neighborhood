@@ -67,8 +67,8 @@ mae = mean_absolute_error(test["rating"], test["predicao"])
 
 print(f"RMSE= {rmse}")
 print(f"MAE= {mae}")
-# RMSE= 0.8667137117752014
-# MAE= 0.6627077073075438
+# RMSE= 0.876541674196674
+# MAE= 0.66917977775646
 
 # %%
 # from itertools import product
