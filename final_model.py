@@ -15,22 +15,22 @@ from data import n_items, n_users, test_df, to_indexed, train_df
 # Sem feedback implícito: N(u) = R(u) e N^k(i;u) = R^k(i;u), logo os dois
 # somatórios de vizinhança percorrem os mesmos top-k vizinhos de i que u avaliou.
 
-K = 20
-NUM_NEIGHBORS = 40
-NUM_EPOCHS = 30
-SIM_SHRINKAGE = 100
+K = 40
+NUM_NEIGHBORS = 30
+NUM_EPOCHS = 45
+SIM_SHRINKAGE = 200
 ITEM_BIAS_SHRINKAGE = 10
 USER_BIAS_SHRINKAGE = 10
 
 # Taxas de aprendizado por grupo de parâmetro (Koren: γ1, γ2, γ3)
-GAMMA_BIAS = 0.007  # γ1: b_u, b_i
-GAMMA_FACTOR = 0.007  # γ2: p_u, q_i, y_j
-GAMMA_WEIGHT = 0.001  # γ3: w_ij, c_ij
+GAMMA_BIAS = 0.003  # γ1: b_u, b_i
+GAMMA_FACTOR = 0.001  # γ2: p_u, q_i, y_j
+GAMMA_WEIGHT = 0.003  # γ3: w_ij, c_ij
 
 # Regularização por grupo de parâmetro (Koren: λ6, λ7, λ8)
-LAMBDA_BIAS = 0.005  # λ6
-LAMBDA_FACTOR = 0.015  # λ7
-LAMBDA_WEIGHT = 0.015  # λ8
+LAMBDA_BIAS = 0.0015  # λ6
+LAMBDA_FACTOR = 0.07  # λ7
+LAMBDA_WEIGHT = 0.006  # λ8
 
 DECAY = 0.9
 SEED = 42
@@ -228,5 +228,5 @@ rmse, mae = evaluate(u_test, i_test, r_test)
 print(f"\nRMSE: {rmse:.4f}")
 print(f"MAE:  {mae:.4f}")
 
-# RMSE= 0.8745
-# MAE=  0.6677
+# RMSE= 0.8658
+# MAE=  0.6601
